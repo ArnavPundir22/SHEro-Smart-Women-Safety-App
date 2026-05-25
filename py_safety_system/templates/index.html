@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Safety App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body { font-family: Arial; text-align: center; margin-top: 20px; background-color: #fce4e4; }
+        .hidden { display: none; }
+        video { width: 100%; max-width: 300px; border: 2px solid red; margin-top: 10px; border-radius: 8px;}
+        button { padding: 15px 30px; font-size: 18px; background-color: #d9534f; color: white; border: none; border-radius: 8px; margin-top: 20px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>🛡️ Safety App</h1>
+    <p>Please allow microphone, camera, and location access.</p>
+    
+    <div id="start-screen">
+        <button onclick="startListening()">Start Monitoring</button>
+    </div>
+
+    <div id="active-screen" class="hidden">
+        <h2 id="status">🎤 Listening for "help"...</h2>
+        
+        <div id="streams" class="hidden">
+            <h3>🔴 Broadcasting Live</h3>
+            <video id="front-video" autoplay playsinline muted></video>
+            <video id="back-video" autoplay playsinline muted></video>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let helpCount = 0;
+        const TRIGGER_COUNT = 3;
+        let alertTriggered = false;
+
+        function startListening() {
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('active-screen').classList.remove('hidden');
+
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (SpeechRecognition) {
+                const recognition = new SpeechRecognition();
+                recognition.continuous = true;
+                recognition.interimResults = false;
+                
+                recognition.onresult = (event) => {
+                    const transcript = event.results[event.results.length - 1][0].transcript.toLowerCase();
+                    console.log("Heard: ", transcript);
+                    if (transcript.includes("help") && !alertTriggered) {
+                        helpCount++;
+                        document.getElementById('status').innerText = `⚠️ Help detected (${helpCount}/${TRIGGER_COUNT})`;
+                        if (helpCount >= TRIGGER_COUNT) {
+                            triggerEmergency();
+                        }
+                    }
+                };
+                
+                recognition.onend = () => { if (!alertTriggered) recognition.start(); };
+                recognition.start();
+            } else {
+                document.getElementById('status').innerText = "Speech Recognition not supported on this browser (Try Chrome/Safari).";
+            }
+        }
+
+        function triggerEmergency() {
+            if(alertTriggered) return;
+            alertTriggered = true;
+            document.getElementById('status').innerText = "🚨 EMERGENCY TRIGGERED 🚨";
+            document.getElementById('streams').classList.remove('hidden');
+            
+            // Get Location
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition((pos) => {
+                    socket.emit('trigger_alert', { lat: pos.coords.latitude, lng: pos.coords.longitude });
+                }, (err) => {
+                    socket.emit('trigger_alert', { lat: 'unknown', lng: 'unknown' });
+                });
+            } else {
+                socket.emit('trigger_alert', { lat: 'unknown', lng: 'unknown' });
+            }
+
+            // Start Cameras (Most phones only allow one camera at a time, we will try both but fallback to front if needed)
+            startCamera('user', 'front-video', 'front');
+            setTimeout(() => {
+                startCamera('environment', 'back-video', 'back');
+            }, 1000);
+        }
+
+        function startCamera(facingMode, videoId, camName) {
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: facingMode } })
+            .then((stream) => {
+                const video = document.getElementById(videoId);
+                video.srcObject = stream;
+                
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                
+                setInterval(() => {
+                    if (video.videoWidth > 0) {
+                        // Compress heavily for real-time mobile transfer
+                        canvas.width = video.videoWidth / 3; 
+                        canvas.height = video.videoHeight / 3;
+                        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        const frameData = canvas.toDataURL('image/jpeg', 0.4);
+                        socket.emit('video_frame', { camera: camName, image: frameData });
+                    }
+                }, 250); // 4 FPS
+            })
+            .catch(err => console.error("Camera access error:", err));
+        }
+    </script>
+</body>
+</html>

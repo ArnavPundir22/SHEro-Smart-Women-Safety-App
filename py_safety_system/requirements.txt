@@ -1,0 +1,8 @@
+Flask==3.0.3
+SpeechRecognition==3.10.3
+pyaudio==0.2.14
+opencv-python==4.9.0.80
+geocoder==1.38.1
+numpy<2
+setuptools
+flask-socketio==5.3.6

